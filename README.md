@@ -30,5 +30,8 @@ func main() {
 		log.Println("key not found")
 	}
 	log.Println("value:", value)
+
+	// delete key
+	cache.Delete("key")
 }
 ```

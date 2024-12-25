@@ -396,7 +396,6 @@ func BenchmarkCache_VariousSizes(b *testing.B) {
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
 			cache := New[int](time.Minute, time.Minute)
 
-			// 预填充缓存
 			for i := 0; i < size; i++ {
 				key := fmt.Sprintf("key_%d", i)
 				cache.Set(key, i, time.Minute)
@@ -414,7 +413,7 @@ func BenchmarkCache_VariousSizes(b *testing.B) {
 
 func BenchmarkCache_LargeData(b *testing.B) {
 	type LargeData struct {
-		Data [1024]byte // 1KB 数据
+		Data [1024]byte
 	}
 
 	cache := New[LargeData](time.Minute, time.Minute)
