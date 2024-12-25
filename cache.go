@@ -55,6 +55,9 @@ func (c *Cache[T]) Set(key string, value T, duration time.Duration) {
 }
 
 func (c *Cache[T]) Get(key string) (T, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
 	item, found := c.items[key]
 	if !found {
 		return item.Object, false
