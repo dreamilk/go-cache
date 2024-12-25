@@ -1,15 +1,3 @@
-# go-cache
-memory cache for go
-
-
-## Usage
-
-
-```go get github.com/dreamilk/go-cache```
-
-### Example
-
-```
 package main
 
 import (
@@ -31,4 +19,3 @@ func main() {
 	}
 	log.Println("value:", value)
 }
-```
