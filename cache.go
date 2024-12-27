@@ -24,15 +24,15 @@ type Cache[T any] struct {
 }
 
 func New[T any](defaultExpiration, cleanupInterval time.Duration) *Cache[T] {
-	c := &Cache[T]{
+	cache := &Cache[T]{
 		defaultExpiration: defaultExpiration,
 		cleanupInterval:   cleanupInterval,
 		mu:                sync.RWMutex{},
 		items:             make(map[string]Item[T]),
 		stopCleanup:       make(chan struct{}),
 	}
-	c.startCleanup()
-	return c
+	cache.startCleanup()
+	return cache
 }
 
 func (c *Cache[T]) Set(key string, value T, duration time.Duration) {
@@ -59,12 +59,9 @@ func (c *Cache[T]) Get(key string) (T, bool) {
 	defer c.mu.RUnlock()
 
 	item, found := c.items[key]
-	if !found {
-		return item.Object, false
-	}
-
-	if item.Expiration > 0 && time.Now().UnixNano() > item.Expiration {
-		return item.Object, false
+	if !found || (item.Expiration > 0 && time.Now().UnixNano() > item.Expiration) {
+		var zeroValue T
+		return zeroValue, false
 	}
 
 	return item.Object, true
