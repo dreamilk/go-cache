@@ -1,10 +1,9 @@
 # go-cache
 memory cache for go
 
-
 ## Usage
 
-
+### Install
 ```go get github.com/dreamilk/go-cache```
 
 ### Example
@@ -34,4 +33,16 @@ func main() {
 	// delete key
 	cache.Delete("key")
 }
+```
+
+## Test
+
+```
+go test -v
+```
+
+## Benchmark
+
+```
+go test -bench=.
 ```

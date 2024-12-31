@@ -3,367 +3,154 @@ package gocache
 import (
 	"fmt"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 )
 
-func TestCache(t *testing.T) {
-	cache := New[int](time.Second, time.Second)
-	cache.Set("key", 1, time.Second)
-	value, ok := cache.Get("key")
-	if !ok {
-		t.Error("key not found")
-	}
-	if value != 1 {
-		t.Error("value is not 1")
-	}
-
-	time.Sleep(time.Second)
-	_, ok = cache.Get("key")
-	if ok {
-		t.Error("key should be expired")
-	}
+func intPtr(i int) *int {
+	return &i
 }
 
 func TestCache_Set(t *testing.T) {
-	// Test basic types
-	t.Run("int", func(t *testing.T) {
-		cache := New[int](time.Second, time.Second)
-		cache.Set("key", 1, time.Second)
-		v, ok := cache.Get("key")
-		if !ok {
-			t.Error("key not found")
-		}
-		if v != 1 {
-			t.Errorf("expected 1, got %v", v)
-		}
-	})
+	runCacheSetTests(t, "int", New[int], 1, 1)
+	runCacheSetTests(t, "string", New[string], "value", "value")
+	runCacheSetTests(t, "slice", New[[]int], []int{1, 2, 3}, []int{1, 2, 3})
+	runCacheSetTests(t, "map", New[map[string]int], map[string]int{"a": 1, "b": 2}, map[string]int{"a": 1, "b": 2})
 
-	t.Run("string", func(t *testing.T) {
-		cache := New[string](time.Second, time.Second)
-		cache.Set("key", "value", time.Second)
-		v, ok := cache.Get("key")
-		if !ok {
-			t.Error("key not found")
-		}
-		if v != "value" {
-			t.Errorf("expected 'value', got %v", v)
-		}
-	})
+	type TestStruct struct {
+		A int
+		B string
+	}
+	runCacheSetTests(t, "struct", New[TestStruct], TestStruct{A: 1, B: "value"}, TestStruct{A: 1, B: "value"})
 
-	// Test complex types
-	t.Run("slice", func(t *testing.T) {
-		cache := New[[]int](time.Second, time.Second)
-		expected := []int{1, 2, 3}
-		cache.Set("key", expected, time.Second)
+	p := intPtr(1)
+	runCacheSetTests(t, "pointer", New[*int], p, p)
+	runCacheSetTests(t, "interface", New[interface{}], 1, 1)
+	runCacheSetTests(t, "struct_pointer", New[*TestStruct], &TestStruct{A: 1, B: "value"}, &TestStruct{A: 1, B: "value"})
+}
+
+func runCacheSetTests[T any](t *testing.T, name string, newCache func(time.Duration, time.Duration) *Cache[T], expected T, value T) {
+	t.Run(name, func(t *testing.T) {
+		cache := newCache(time.Second, time.Second)
+		cache.Set("key", value, time.Second)
 		v, ok := cache.Get("key")
 		if !ok {
-			t.Error("key not found")
+			t.Fatalf("key not found in cache")
 		}
 		if !reflect.DeepEqual(v, expected) {
-			t.Errorf("expected %v, got %v", expected, v)
-		}
-	})
-
-	t.Run("map", func(t *testing.T) {
-		cache := New[map[string]int](time.Second, time.Second)
-		expected := map[string]int{"a": 1, "b": 2}
-		cache.Set("key", expected, time.Second)
-		v, ok := cache.Get("key")
-		if !ok {
-			t.Error("key not found")
-		}
-		if !reflect.DeepEqual(v, expected) {
-			t.Errorf("expected %v, got %v", expected, v)
-		}
-	})
-
-	t.Run("struct", func(t *testing.T) {
-		cache := New[struct {
-			A int
-			B string
-		}](time.Second, time.Second)
-		expected := struct {
-			A int
-			B string
-		}{A: 1, B: "value"}
-		cache.Set("key", expected, time.Second)
-		v, ok := cache.Get("key")
-		if !ok {
-			t.Error("key not found")
-		}
-		if v != expected {
-			t.Errorf("expected %v, got %v", expected, v)
-		}
-	})
-
-	t.Run("pointer", func(t *testing.T) {
-		cache := New[*int](time.Second, time.Second)
-		expected := 1
-		cache.Set("key", &expected, time.Second)
-		v, ok := cache.Get("key")
-		if !ok {
-			t.Error("key not found")
-		}
-		if *v != expected {
-			t.Errorf("expected %v, got %v", expected, *v)
-		}
-	})
-
-	t.Run("interface", func(t *testing.T) {
-		cache := New[interface{}](time.Second, time.Second)
-		expected := 1
-		cache.Set("key", expected, time.Second)
-		v, ok := cache.Get("key")
-		if !ok {
-			t.Error("key not found")
-		}
-		if v != expected {
-			t.Errorf("expected %v, got %v", expected, v)
-		}
-	})
-
-	t.Run("struct_pointer", func(t *testing.T) {
-		cache := New[*struct {
-			A int
-			B string
-		}](time.Second, time.Second)
-		expected := &struct {
-			A int
-			B string
-		}{A: 1, B: "value"}
-		cache.Set("key", expected, time.Second)
-		v, ok := cache.Get("key")
-		if !ok {
-			t.Error("key not found")
-		}
-		if v != expected {
-			t.Errorf("expected %v, got %v", expected, v)
+			t.Fatalf("expected %v, got %v", expected, v)
 		}
 	})
 }
 
 func TestCache_Delete(t *testing.T) {
-	t.Run("int", func(t *testing.T) {
-		cache := New[int](time.Second, time.Second)
-		cache.Set("key", 1, time.Second)
-		cache.Delete("key")
-		_, ok := cache.Get("key")
-		if ok {
-			t.Error("key should be deleted")
-		}
-	})
+	runCacheDeleteTests(t, "int", New[int], 1)
+	runCacheDeleteTests(t, "string", New[string], "value")
+	runCacheDeleteTests(t, "slice", New[[]int], []int{1, 2, 3})
+	runCacheDeleteTests(t, "map", New[map[string]int], map[string]int{"a": 1, "b": 2})
 
-	t.Run("string", func(t *testing.T) {
-		cache := New[string](time.Second, time.Second)
-		cache.Set("key", "value", time.Second)
-		cache.Delete("key")
-		_, ok := cache.Get("key")
-		if ok {
-			t.Error("key should be deleted")
-		}
-	})
+	type TestStruct struct {
+		A int
+		B string
+	}
+	runCacheDeleteTests(t, "struct", New[TestStruct], TestStruct{A: 1, B: "value"})
+	runCacheDeleteTests(t, "pointer", New[*int], intPtr(1))
+	runCacheDeleteTests(t, "interface", New[interface{}], 1)
+	runCacheDeleteTests(t, "struct_pointer", New[*TestStruct], &TestStruct{A: 1, B: "value"})
+}
 
-	t.Run("slice", func(t *testing.T) {
-		cache := New[[]int](time.Second, time.Second)
-		expected := []int{1, 2, 3}
-		cache.Set("key", expected, time.Second)
+func runCacheDeleteTests[T any](t *testing.T, name string, newCache func(time.Duration, time.Duration) *Cache[T], value T) {
+	t.Run(name, func(t *testing.T) {
+		cache := newCache(time.Second, time.Second)
+		cache.Set("key", value, time.Second)
 		cache.Delete("key")
-		_, ok := cache.Get("key")
-		if ok {
-			t.Error("key should be deleted")
-		}
-	})
-
-	t.Run("map", func(t *testing.T) {
-		cache := New[map[string]int](time.Second, time.Second)
-		expected := map[string]int{"a": 1, "b": 2}
-		cache.Set("key", expected, time.Second)
-		cache.Delete("key")
-		_, ok := cache.Get("key")
-		if ok {
-			t.Error("key should be deleted")
-		}
-	})
-
-	t.Run("struct", func(t *testing.T) {
-		cache := New[struct {
-			A int
-			B string
-		}](time.Second, time.Second)
-		expected := struct {
-			A int
-			B string
-		}{A: 1, B: "value"}
-		cache.Set("key", expected, time.Second)
-		cache.Delete("key")
-		_, ok := cache.Get("key")
-		if ok {
-			t.Error("key should be deleted")
-		}
-	})
-
-	t.Run("pointer", func(t *testing.T) {
-		cache := New[*int](time.Second, time.Second)
-		expected := 1
-		cache.Set("key", &expected, time.Second)
-		cache.Delete("key")
-		_, ok := cache.Get("key")
-		if ok {
-			t.Error("key should be deleted")
-		}
-	})
-
-	t.Run("interface", func(t *testing.T) {
-		cache := New[interface{}](time.Second, time.Second)
-		expected := 1
-		cache.Set("key", expected, time.Second)
-		cache.Delete("key")
-		_, ok := cache.Get("key")
-		if ok {
-			t.Error("key should be deleted")
-		}
-	})
-
-	t.Run("struct_pointer", func(t *testing.T) {
-		cache := New[*struct {
-			A int
-			B string
-		}](time.Second, time.Second)
-		expected := &struct {
-			A int
-			B string
-		}{A: 1, B: "value"}
-		cache.Set("key", expected, time.Second)
-		cache.Delete("key")
-		_, ok := cache.Get("key")
-		if ok {
-			t.Error("key should be deleted")
+		if _, ok := cache.Get("key"); ok {
+			t.Fatal("expected key to be deleted from cache")
 		}
 	})
 }
 
 func TestCache_Cleanup(t *testing.T) {
-	t.Run("int", func(t *testing.T) {
-		cache := New[int](time.Second, time.Second)
-		cache.Set("key", 1, time.Second)
+	runCacheCleanupTests(t, "int", New[int], 1)
+	runCacheCleanupTests(t, "string", New[string], "value")
+	runCacheCleanupTests(t, "slice", New[[]int], []int{1, 2, 3})
+	runCacheCleanupTests(t, "map", New[map[string]int], map[string]int{"a": 1, "b": 2})
 
-		time.Sleep(time.Second * 2)
+	type TestStruct struct {
+		A int
+		B string
+	}
+	runCacheCleanupTests(t, "struct", New[TestStruct], TestStruct{A: 1, B: "value"})
+	runCacheCleanupTests(t, "pointer", New[*int], intPtr(1))
+	runCacheCleanupTests(t, "interface", New[interface{}], 1)
+	runCacheCleanupTests(t, "struct_pointer", New[*TestStruct], &TestStruct{A: 1, B: "value"})
+}
 
-		_, ok := cache.Get("key")
-		if ok {
-			t.Error("key should be deleted")
+func runCacheCleanupTests[T any](t *testing.T, name string, newCache func(time.Duration, time.Duration) *Cache[T], value T) {
+	t.Run(name, func(t *testing.T) {
+		cache := newCache(time.Second, time.Second)
+		cache.Set("key", value, time.Second)
+		time.Sleep(2 * time.Second)
+		if _, ok := cache.Get("key"); ok {
+			t.Fatal("expected key to be removed by cleanup")
 		}
 	})
+}
 
-	t.Run("string", func(t *testing.T) {
-		cache := New[string](time.Second, time.Second)
-		cache.Set("key", "value", time.Second)
+func TestCache_ConcurrentAccessDifferentTypes(t *testing.T) {
+	cacheInt := New[int](time.Minute, time.Minute)
+	cacheString := New[string](time.Minute, time.Minute)
+	defer cacheInt.Close()
+	defer cacheString.Close()
 
-		time.Sleep(time.Second * 2)
+	var wg sync.WaitGroup
+	numGoroutines := 100
 
-		_, ok := cache.Get("key")
-		if ok {
-			t.Error("key should be deleted")
-		}
-	})
+	// Concurrently set and get int values
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			key := fmt.Sprintf("int_key_%d", i)
+			cacheInt.Set(key, i, time.Minute)
+			val, ok := cacheInt.Get(key)
+			if !ok || val != i {
+				t.Errorf("expected %d, got %v", i, val)
+			}
+		}(i)
+	}
 
-	t.Run("slice", func(t *testing.T) {
-		cache := New[[]int](time.Second, time.Second)
-		expected := []int{1, 2, 3}
-		cache.Set("key", expected, time.Second)
+	// Concurrently set and get string values
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			key := fmt.Sprintf("string_key_%d", i)
+			value := fmt.Sprintf("value_%d", i)
+			cacheString.Set(key, value, time.Minute)
+			val, ok := cacheString.Get(key)
+			if !ok || val != value {
+				t.Errorf("expected %s, got %v", value, val)
+			}
+		}(i)
+	}
 
-		time.Sleep(time.Second * 2)
+	wg.Wait()
 
-		_, ok := cache.Get("key")
-		if ok {
-			t.Error("key should be deleted")
-		}
-	})
-
-	t.Run("map", func(t *testing.T) {
-		cache := New[map[string]int](time.Second, time.Second)
-		expected := map[string]int{"a": 1, "b": 2}
-		cache.Set("key", expected, time.Second)
-
-		time.Sleep(time.Second * 2)
-
-		_, ok := cache.Get("key")
-		if ok {
-			t.Error("key should be deleted")
-		}
-	})
-
-	t.Run("struct", func(t *testing.T) {
-		cache := New[struct {
-			A int
-			B string
-		}](time.Second, time.Second)
-		expected := struct {
-			A int
-			B string
-		}{A: 1, B: "value"}
-		cache.Set("key", expected, time.Second)
-
-		time.Sleep(time.Second * 2)
-
-		_, ok := cache.Get("key")
-		if ok {
-			t.Error("key should be deleted")
-		}
-	})
-
-	t.Run("pointer", func(t *testing.T) {
-		cache := New[*int](time.Second, time.Second)
-		expected := 1
-		cache.Set("key", &expected, time.Second)
-
-		time.Sleep(time.Second * 2)
-
-		_, ok := cache.Get("key")
-		if ok {
-			t.Error("key should be deleted")
-		}
-	})
-
-	t.Run("interface", func(t *testing.T) {
-		cache := New[interface{}](time.Second, time.Second)
-		expected := 1
-		cache.Set("key", expected, time.Second)
-
-		time.Sleep(time.Second * 2)
-
-		_, ok := cache.Get("key")
-		if ok {
-			t.Error("key should be deleted")
-		}
-	})
-
-	t.Run("struct_pointer", func(t *testing.T) {
-		cache := New[*struct {
-			A int
-			B string
-		}](time.Second, time.Second)
-		expected := &struct {
-			A int
-			B string
-		}{A: 1, B: "value"}
-		cache.Set("key", expected, time.Second)
-
-		time.Sleep(time.Second * 2)
-
-		_, ok := cache.Get("key")
-		if ok {
-			t.Error("key should be deleted")
-		}
-	})
+	// Verify counts
+	if cacheInt.Count() != numGoroutines {
+		t.Fatalf("expected %d int items, got %d", numGoroutines, cacheInt.Count())
+	}
+	if cacheString.Count() != numGoroutines {
+		t.Fatalf("expected %d string items, got %d", numGoroutines, cacheString.Count())
+	}
 }
 
 func BenchmarkCache_HighConcurrency(b *testing.B) {
 	cache := New[int](time.Minute, time.Minute)
 
 	b.ResetTimer()
-
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			key := "concurrent_key"
@@ -377,7 +164,6 @@ func BenchmarkCache_HighConcurrency(b *testing.B) {
 
 func BenchmarkCache_MixedReadWrite(b *testing.B) {
 	cache := New[int](time.Minute, time.Minute)
-
 	b.RunParallel(func(pb *testing.PB) {
 		i := 0
 		for pb.Next() {
@@ -395,17 +181,13 @@ func BenchmarkCache_VariousSizes(b *testing.B) {
 	for _, size := range sizes {
 		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
 			cache := New[int](time.Minute, time.Minute)
-
 			for i := 0; i < size; i++ {
-				key := fmt.Sprintf("key_%d", i)
-				cache.Set(key, i, time.Minute)
+				cache.Set(fmt.Sprintf("key_%d", i), i, time.Minute)
 			}
 
 			b.ResetTimer()
-
 			for i := 0; i < b.N; i++ {
-				key := fmt.Sprintf("key_%d", i%size)
-				cache.Get(key)
+				cache.Get(fmt.Sprintf("key_%d", i%size))
 			}
 		})
 	}
@@ -420,7 +202,6 @@ func BenchmarkCache_LargeData(b *testing.B) {
 	largeData := LargeData{}
 
 	b.ResetTimer()
-
 	for i := 0; i < b.N; i++ {
 		key := fmt.Sprintf("key_%d", i)
 		cache.Set(key, largeData, time.Minute)
