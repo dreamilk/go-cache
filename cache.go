@@ -21,6 +21,8 @@ type Cache[T any] struct {
 	items             map[string]Item[T]
 	mu                sync.RWMutex
 	stopCleanup       chan struct{}
+
+	onEvicted func(key string, value T)
 }
 
 func New[T any](defaultExpiration, cleanupInterval time.Duration) *Cache[T] {
@@ -30,8 +32,15 @@ func New[T any](defaultExpiration, cleanupInterval time.Duration) *Cache[T] {
 		mu:                sync.RWMutex{},
 		items:             make(map[string]Item[T]),
 		stopCleanup:       make(chan struct{}),
+		onEvicted:         nil,
 	}
 	cache.startCleanup()
+	return cache
+}
+
+func NewWithEviction[T any](defaultExpiration, cleanupInterval time.Duration, onEvicted func(key string, value T)) *Cache[T] {
+	cache := New[T](defaultExpiration, cleanupInterval)
+	cache.onEvicted = onEvicted
 	return cache
 }
 
@@ -144,6 +153,9 @@ func (c *Cache[T]) deleteExpired() {
 
 	for key, item := range c.items {
 		if item.Expiration > 0 && time.Now().UnixNano() > item.Expiration {
+			if c.onEvicted != nil {
+				c.onEvicted(key, item.Object)
+			}
 			delete(c.items, key)
 		}
 	}
